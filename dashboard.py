@@ -3,47 +3,54 @@ from dash import Dash, dcc, html
 import plotly.graph_objs as go
 import os
 from dash.dependencies import Input, Output
-
+import numpy as np
 
 # Chargement des données depuis le fichier CSV
 def load_data():
     if os.path.exists('eurostoxx50_data.csv'):
         df = pd.read_csv('eurostoxx50_data.csv', names=['Date', 'Index', 'Price'])
 
-        # Nettoyage de la colonne Date
+        # Nettoyage : enlever " CEST"
         df['Date'] = df['Date'].str.replace(' CEST', '', regex=False)
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 
-        # Conversion des prix en float
+        # Essayer les deux formats de date
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', format='%a %b %d %H:%M:%S %Y')
+        df.loc[df['Date'].isna(), 'Date'] = pd.to_datetime(df['Date'], errors='coerce')
+
+        # Conversion prix
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
 
         return df.dropna()
     else:
         return pd.DataFrame(columns=['Date', 'Index', 'Price'])
 
+# Calcule la volatilité pour un intervalle (rolling std)
+def calculate_volatility(df, window_minutes):
+    df_sorted = df.sort_values('Date')
+    df_sorted = df_sorted.set_index('Date').resample(f'{window_minutes}T').last()
+    return df_sorted['Price'].pct_change().rolling(2).std().dropna().mean() * 100
 
-# Création de l'app Dash
+# Création app Dash
 app = Dash(__name__)
 
 app.layout = html.Div(children=[
     html.H1("Graphique Eurostoxx 50 - Données Temps Réel"),
 
     dcc.Graph(id='price-graph', figure={}),
+
+    html.H2("Volatilité Moyenne (%)"),
     dcc.Graph(id='volatility-graph', figure={})
 ])
-
 
 @app.callback(
     Output('price-graph', 'figure'),
     Output('volatility-graph', 'figure'),
-    Input('price-graph', 'id')  # Déclenchement initial
+    Input('price-graph', 'id')  # juste déclencheur
 )
-def update_graphs(_):
+def update_graph(_):
     df = load_data()
-    if df.empty:
-        return {}, {}
 
-    # Graphique principal : prix
+    # --- Graphe des prix ---
     price_fig = go.Figure()
     price_fig.add_trace(go.Scatter(
         x=df['Date'],
@@ -52,38 +59,31 @@ def update_graphs(_):
         name='Prix'
     ))
     price_fig.update_layout(
-        title='Evolution du prix Eurostoxx 50',
+        title='Évolution du prix Eurostoxx 50',
         xaxis_title='Date',
         yaxis_title='Prix',
         template='plotly_dark'
     )
 
-    # Calcul de la volatilité
-    now = df['Date'].max()
-    vol_10min = df[df['Date'] > now - pd.Timedelta(minutes=10)]['Price'].std()
-    vol_30min = df[df['Date'] > now - pd.Timedelta(minutes=30)]['Price'].std()
-    vol_2h = df[df['Date'] > now - pd.Timedelta(hours=2)]['Price'].std()
+    # --- Histogramme de volatilité ---
+    vol_10 = calculate_volatility(df, 10)
+    vol_30 = calculate_volatility(df, 30)
+    vol_120 = calculate_volatility(df, 120)
 
-        # Graphique secondaire : histogramme de volatilité
-    vol_fig = go.Figure(go.Bar(
-        x=['10 min', '30 min', '2 h'],
-        y=[vol_10min, vol_30min, vol_2h],
-        marker_color=['#FF5733', '#33FF57', '#3357FF'],  # couleurs différentes
-        width=[0.3, 0.3, 0.3]  # barres plus fines
-    ))
-
+    vol_fig = go.Figure()
+    vol_fig.add_trace(go.Bar(x=['10 min', '30 min', '2h'], y=[vol_10, vol_30, vol_120],
+                             marker=dict(color=['red', 'green', 'blue'], line=dict(width=0.5))))
     vol_fig.update_layout(
-        title='Volatilité sur différentes périodes',
-        xaxis_title='Période',
-        yaxis_title='Écart-type (volatilité)',
-        yaxis=dict(range=[0, 3]),  # axe Y fixe
+        yaxis=dict(range=[0, 3]),
+        bargap=0.3,
+        title='Volatilité moyenne (écart-type des variations %)',
+        xaxis_title='Fenêtre',
+        yaxis_title='Volatilité (%)',
         template='plotly_dark'
     )
 
-
     return price_fig, vol_fig
 
-
-# Lancement du serveur Dash sur 0.0.0.0:8050
+# Lancement du serveur
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8050)
