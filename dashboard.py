@@ -1,50 +1,49 @@
-import pandas as pd
-import numpy as np
-from dash import Dash, dcc, html
+import dash
+from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
+import pandas as pd
+import numpy as np
 import os
 
 # Créer l'application Dash
-app = Dash(__name__)
+app = dash.Dash(__name__)
+
+import pandas as pd
 
 def load_data():
     if os.path.exists('eurostoxx50_data.csv'):
         try:
-            df = pd.read_csv('eurostoxx50_data.csv', names=['Date', 'Index', 'Price'])
-            # Supprimer le fuseau horaire "CEST" dans les chaînes de dates
-            df['Date'] = df['Date'].str.replace(r' CEST', '', regex=True)
-
-            # Conversion en datetime
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-            df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
-
-            # Nettoyage
-            df = df.dropna(subset=['Date', 'Price'])
+            df = pd.read_csv('eurostoxx50_data.csv')
+            # Vérifier si la colonne 'date' existe (en minuscules)
+            if 'date' in df.columns:
+                df['Date'] = df['date']
+            # Suppression de la partie du fuseau horaire (CEST) et de l'année
+            df['Date'] = df['Date'].str.replace(r' \w{3} \d{4}', '', regex=True)  # Suppression du CEST et de l'année
+            df['Date'] = pd.to_datetime(df['Date'], format='%a %b %d %H:%M:%S', errors='coerce')
             df = df.sort_values(by='Date')
+            df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
             return df
-
         except Exception as e:
             print(f"❌ Erreur lors du chargement du fichier : {e}")
             return pd.DataFrame(columns=['Date', 'Index', 'Price'])
     else:
         print("❌ Fichier 'eurostoxx50_data.csv' introuvable.")
         return pd.DataFrame(columns=['Date', 'Index', 'Price'])
-
 # Fonction pour calculer la volatilité
 def calculate_volatility(df, interval_minutes=60):
     # Filtrer les données des dernières "interval_minutes"
     recent_df = df[df['Date'] > (df['Date'].max() - pd.Timedelta(minutes=interval_minutes))]
-    if len(recent_df) < 2:  # Si pas assez de données, retour vide
+    if len(recent_df) < 2:
         return None
     prices = recent_df['Price'].astype(float)
     returns = prices.pct_change().dropna()  # Variation en pourcentage
-    volatility = np.std(returns) * np.sqrt(len(returns))  # Volatilité annualisée approximative
+    volatility = np.std(returns) * np.sqrt(len(returns)) * 100  # Volatilité annualisée approximative
     return volatility
 
 # Layout de l'application
 app.layout = html.Div([
-    html.H1("Dashboard Eurostoxx 50 en Temps Réel"),
+    html.H1("Dashboard Eurostoxx50"),
     dcc.Graph(id='live-graph-price'),
     dcc.Graph(id='live-graph-volatility'),
     dcc.Interval(
@@ -63,44 +62,31 @@ app.layout = html.Div([
 def update_graphs(n):
     df = load_data()
     if df.empty:
-        return go.Figure(), go.Figure()
+        return go.Figure(), go.Figure()  # Renvoie des graphiques vides si aucune donnée n'est trouvée
 
     # Graphique des prix
-    price_fig = go.Figure(data=[
-        go.Scatter(
-            x=df['Date'],
-            y=df['Price'],
-            mode='lines+markers',
-            name='Prix Eurostoxx 50'
-        )
-    ])
-    price_fig.update_layout(
-        title='Prix Eurostoxx 50 en temps réel',
-        xaxis_title='Date',
-        yaxis_title='Prix',
-        template='plotly_dark'
-    )
+    price_fig = go.Figure(data=[go.Scatter(x=df['Date'], y=df['Price'], mode='lines+markers', name='Prix Eurostoxx 50')])
+    price_fig.update_layout(title='Price Eurostoxx 50',
+                            xaxis_title='Date',
+                            yaxis_title='Price',
+                            template='plotly_dark')
 
-    # Calcul de la volatilité sur 3 intervalles
-    vol_2h = calculate_volatility(df, interval_minutes=120)
-    vol_30min = calculate_volatility(df, interval_minutes=30)
-    vol_10min = calculate_volatility(df, interval_minutes=10)
+    # Calcul de la volatilité
+    vol_10min = calculate_volatility(df, 10)
+    vol_30min = calculate_volatility(df, 30)
+    vol_60min = calculate_volatility(df, 60)  # Volatilité sur 1 heure
 
-    # Graphique de la volatilité en barres
-    vol_fig = go.Figure(data=[
-        go.Bar(
-            x=['2h', '30min', '10min'],
-            y=[vol_2h or 0, vol_30min or 0, vol_10min or 0],
-            name='Volatilité'
-        )
-    ])
-    vol_fig.update_layout(
-        title="Volatilité de l'Eurostoxx 50",
-        xaxis_title='Période',
-        yaxis_title='Volatilité',
-        yaxis=dict(range=[0, 2]),
-        template='plotly_dark'
-    )
+    # Préparation des graphiques de volatilité
+    vol_fig = go.Figure()
+    vol_fig.add_trace(go.Bar(x=['Volatilité 10 min'], y=[vol_10min if vol_10min else 0], name='Volatilité 10 min'))
+    vol_fig.add_trace(go.Bar(x=['Volatilité 30 min'], y=[vol_30min if vol_30min else 0], name='Volatilité 30 min'))
+    vol_fig.add_trace(go.Bar(x=['Volatilité 1 heure'], y=[vol_60min if vol_60min else 0], name='Volatilité 1 heure'))
+
+    vol_fig.update_layout(title='Volatilités calculées',
+                          xaxis_title='Période',
+                          yaxis_title='Volatilité en %',
+                          yaxis=dict(range=[0, 3]),
+                          template='plotly_dark')
 
     return price_fig, vol_fig
 
