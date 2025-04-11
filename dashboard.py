@@ -2,6 +2,8 @@ import pandas as pd
 from dash import Dash, dcc, html
 import plotly.graph_objs as go
 import os
+from dash.dependencies import Input, Output
+
 
 # Chargement des données depuis le fichier CSV
 def load_data():
