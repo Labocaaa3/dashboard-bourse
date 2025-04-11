@@ -1,18 +1,27 @@
 #!/bin/bash
 
-# URL de la page contenant les données (par exemple Investing.com pour Eurostoxx 50)
+# Aller dans le répertoire du script (important pour cron)
+cd "$(dirname "$0")"
+
+# URL de la page contenant les données
 URL="https://www.investing.com/indices/eu-stoxx50"
 
-# Récupération du prix
+# User-Agent pour éviter les blocages
 html=$(curl -s -A "Mozilla/5.0" "$URL")
-echo "HTML récupéré : $html"  # Message de débogage
 
+# Extraction du prix
 price=$(echo "$html" | grep -oP '(?<="last":)[0-9]+(\.[0-9]+)?' | head -n 1)
 
-# Vérification et ajout des données dans le fichier CSV
+# Fichier CSV de destination
+CSV_FILE="eurostoxx50_data.csv"
+
+# Format de date lisible
+current_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Ajout ou erreur
 if [ -z "$price" ]; then
-    echo "Erreur : Impossible de récupérer le prix."
+    echo "$current_time ❌ ERREUR : Impossible de récupérer le prix." >> scraper.log
 else
-    echo "$(date), Eurostoxx 50, $price" >> eurostoxx50_data.csv
-    echo "Prix ajouté au fichier CSV."
+    echo "$current_time, Eurostoxx 50, $price" >> "$CSV_FILE"
+    echo "$current_time ✅ Prix ajouté au fichier CSV : $price" >> scraper.log
 fi
