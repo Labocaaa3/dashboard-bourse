@@ -64,18 +64,22 @@ def update_graphs(_):
     vol_30min = df[df['Date'] > now - pd.Timedelta(minutes=30)]['Price'].std()
     vol_2h = df[df['Date'] > now - pd.Timedelta(hours=2)]['Price'].std()
 
-    # Graphique secondaire : histogramme de volatilité
+        # Graphique secondaire : histogramme de volatilité
     vol_fig = go.Figure(go.Bar(
         x=['10 min', '30 min', '2 h'],
         y=[vol_10min, vol_30min, vol_2h],
-        marker_color='orange'
+        marker_color=['#FF5733', '#33FF57', '#3357FF'],  # couleurs différentes
+        width=[0.3, 0.3, 0.3]  # barres plus fines
     ))
+
     vol_fig.update_layout(
         title='Volatilité sur différentes périodes',
         xaxis_title='Période',
         yaxis_title='Écart-type (volatilité)',
+        yaxis=dict(range=[0, 3]),  # axe Y fixe
         template='plotly_dark'
     )
+
 
     return price_fig, vol_fig
 
