@@ -11,10 +11,10 @@ app = Dash(__name__)
 # Fonction pour charger les données
 def load_data():
     if os.path.exists('eurostoxx50_data.csv'):
-        df = pd.read_csv('eurostoxx50_data.csv')
-        df['Date'] = pd.to_datetime(df['Date'])
+        df = pd.read_csv('eurostoxx50_data.csv')  # PAS de 'names' ni de 'header=None'
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         df = df.sort_values(by='Date')
-        return df
+        return df.dropna()
     else:
         return pd.DataFrame(columns=['Date', 'Index', 'Price'])
 
