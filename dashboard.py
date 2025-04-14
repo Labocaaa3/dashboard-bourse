@@ -53,11 +53,13 @@ app.layout = html.Div([
      Output('live-graph-volatility', 'figure')],
     [Input('interval-component', 'n_intervals')]
 )
+# ... (imports et le reste inchangé)
+
 def update_graphs(n):
     df = load_data()
     
     if df.empty:
-        return go.Figure(), go.Figure()  # Renvoie des graphiques vides si aucune donnée n'est trouvée
+        return go.Figure(), go.Figure()
 
     # Graphique des prix
     price_fig = go.Figure(data=[
@@ -68,29 +70,34 @@ def update_graphs(n):
             name='Prix Eurostoxx 50'
         )
     ])
-    price_fig.update_layout(title='Prix Eurostoxx 50 en temps réel',
-                            xaxis_title='Date',
-                            yaxis_title='Prix',
-                            template='plotly_dark')
+    price_fig.update_layout(
+        title='Prix Eurostoxx 50 en temps réel',
+        xaxis_title='Date',
+        yaxis_title='Prix',
+        template='plotly_dark'
+    )
     
-    # Calcul et affichage de la volatilité
-    volatility = calculate_volatility(df)
-    if volatility is not None:
-        vol_fig = go.Figure(data=[
-            go.Bar(
-                x=[str(df['Date'].max())],
-                y=[volatility],
-                name='Volatilité'
-            )
-        ])
-        vol_fig.update_layout(title='Volatilité de l\'Eurostoxx 50 (dernière heure)',
-                              xaxis_title='Date',
-                              yaxis_title='Volatilité',
-                              template='plotly_dark')
-    else:
-        vol_fig = go.Figure()
-    
+    # Calcul de volatilités multiples
+    vol_10min = calculate_volatility(df, 10)
+    vol_30min = calculate_volatility(df, 30)
+    vol_2h = calculate_volatility(df, 120)
+
+    # Graphique de volatilité
+    vol_fig = go.Figure(data=[
+        go.Bar(x=['10 min'], y=[vol_10min], name='Vol 10 min', marker_color='red'),
+        go.Bar(x=['30 min'], y=[vol_30min], name='Vol 30 min', marker_color='orange'),
+        go.Bar(x=['2 h'], y=[vol_2h], name='Vol 2h', marker_color='blue'),
+    ])
+    vol_fig.update_layout(
+        title='Volatilité de l\'Eurostoxx 50 (multi-intervalles)',
+        xaxis_title='Fenêtre de temps',
+        yaxis_title='Volatilité',
+        template='plotly_dark',
+        barmode='group'
+    )
+
     return price_fig, vol_fig
+
 
 # Lancer l'application
 if __name__ == '__main__':
