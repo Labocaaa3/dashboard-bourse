@@ -1,94 +1,93 @@
 import pandas as pd
+import numpy as np
 from dash import Dash, dcc, html
+from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 import os
-from dash.dependencies import Input, Output
 
-def load_data():
-    if not os.path.exists('eurostoxx50_data.csv'):
-        print("[ERROR] Fichier CSV non trouvé.")
-        return pd.DataFrame(columns=['Date', 'Index', 'Price'])
-
-    df = pd.read_csv('eurostoxx50_data.csv', names=['Date', 'Index', 'Price'])
-
-    # Nettoyage des dates
-    df['Date'] = df['Date'].str.replace(' CEST', '', regex=False)
-    
-    # Tentative 1 : ISO
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce', format='%Y-%m-%d %H:%M:%S')
-    mask_na = df['Date'].isna()
-
-    # Tentative 2 : format texte long
-    if mask_na.any():
-        df.loc[mask_na, 'Date'] = pd.to_datetime(df.loc[mask_na, 'Date'], errors='coerce', format='%a %b %d %H:%M:%S %Y')
-    
-    # Erreur persistante ?
-    if df['Date'].isna().any():
-        print("[ERROR] Certaines dates sont toujours invalides après les conversions.")
-        print(df[df['Date'].isna()].head())  # afficher les lignes problématiques
-
-    # Prix
-    df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
-
-    return df.dropna()
-
-# App Dash
+# Créer l'application Dash
 app = Dash(__name__)
 
-app.layout = html.Div(children=[
-    html.H1("Graphique Eurostoxx 50 - Données Temps Réel"),
-    dcc.Graph(id='price-graph', figure={})
+# Fonction pour charger les données
+def load_data():
+    if os.path.exists('eurostoxx50_data.csv'):
+        df = pd.read_csv('eurostoxx50_data.csv')
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.sort_values(by='Date')
+        return df
+    else:
+        return pd.DataFrame(columns=['Date', 'Index', 'Price'])
+
+# Fonction pour calculer la volatilité
+def calculate_volatility(df, interval_minutes=60):
+    # Filtrer les données des dernières "interval_minutes"
+    recent_df = df[df['Date'] > (df['Date'].max() - pd.Timedelta(minutes=interval_minutes))]
+    
+    if len(recent_df) < 2:  # Si pas assez de données, retour vide
+        return None
+    
+    prices = recent_df['Price'].astype(float)
+    returns = prices.pct_change().dropna()  # Variation en pourcentage
+    volatility = np.std(returns) * np.sqrt(len(returns))  # Volatilité annualisée approximative
+    return volatility
+
+# Layout de l'application
+app.layout = html.Div([
+    html.H1("Dashboard Eurostoxx 50 en Temps Réel"),
+    dcc.Graph(id='live-graph-price'),
+    dcc.Graph(id='live-graph-volatility'),
+    dcc.Interval(
+        id='interval-component',
+        interval=5*60*1000,  # Actualisation toutes les 5 minutes
+        n_intervals=0
+    )
 ])
 
+# Callback pour mettre à jour les graphiques
 @app.callback(
-    Output('price-graph', 'figure'),
-    Input('price-graph', 'id')
+    [Output('live-graph-price', 'figure'),
+     Output('live-graph-volatility', 'figure')],
+    [Input('interval-component', 'n_intervals')]
 )
-def update_graph(_):
+def update_graphs(n):
     df = load_data()
-
+    
     if df.empty:
-        print("[ERROR] Données vides après parsing.")
-        return go.Figure(layout={'title': 'Erreur: Données vides'})
+        return go.Figure(), go.Figure()  # Renvoie des graphiques vides si aucune donnée n'est trouvée
 
-    fig = go.Figure()
+    # Graphique des prix
+    price_fig = go.Figure(data=[
+        go.Scatter(
+            x=df['Date'],
+            y=df['Price'],
+            mode='lines+markers',
+            name='Prix Eurostoxx 50'
+        )
+    ])
+    price_fig.update_layout(title='Prix Eurostoxx 50 en temps réel',
+                            xaxis_title='Date',
+                            yaxis_title='Prix',
+                            template='plotly_dark')
+    
+    # Calcul et affichage de la volatilité
+    volatility = calculate_volatility(df)
+    if volatility is not None:
+        vol_fig = go.Figure(data=[
+            go.Bar(
+                x=[str(df['Date'].max())],
+                y=[volatility],
+                name='Volatilité'
+            )
+        ])
+        vol_fig.update_layout(title='Volatilité de l\'Eurostoxx 50 (dernière heure)',
+                              xaxis_title='Date',
+                              yaxis_title='Volatilité',
+                              template='plotly_dark')
+    else:
+        vol_fig = go.Figure()
+    
+    return price_fig, vol_fig
 
-    fig.add_trace(go.Scatter(
-        x=df['Date'],
-        y=df['Price'],
-        mode='lines+markers',
-        name='Prix'
-    ))
-
-    df.set_index('Date', inplace=True)
-    df.sort_index(inplace=True)
-
-    try:
-        vol_10min = df['Price'].rolling('10min').std().mean()
-        vol_30min = df['Price'].rolling('30min').std().mean()
-        vol_2h = df['Price'].rolling('2h').std().mean()
-    except Exception as e:
-        print(f"[ERROR] Problème lors du calcul de la volatilité : {e}")
-        vol_10min = vol_30min = vol_2h = 0
-
-    fig.add_trace(go.Bar(
-        x=['10min', '30min', '2h'],
-        y=[vol_10min, vol_30min, vol_2h],
-        name='Volatilité',
-        marker_color=['red', 'orange', 'blue'],
-        opacity=0.6
-    ))
-
-    fig.update_layout(
-        title='Evolution du prix Eurostoxx 50',
-        xaxis_title='Date',
-        yaxis_title='Prix',
-        template='plotly_dark',
-        yaxis_range=[0, 3]
-    )
-
-    return fig
-
-
+# Lancer l'application
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8050)
+    app.run(debug=True)
