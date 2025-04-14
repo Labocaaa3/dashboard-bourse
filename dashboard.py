@@ -88,7 +88,8 @@ def update_graphs(n):
     vol_fig.update_layout(
         title='Volatilité de l\'Eurostoxx 50 (multi-intervalles)',
         xaxis_title='Fenêtre de temps',
-        yaxis_title='Volatilité',
+        yaxis_title='Volatilité (%)',
+        yaxis_tickformat='.2%',
         template='plotly_dark',
         barmode='group'
     )
