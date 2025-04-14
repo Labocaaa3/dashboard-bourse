@@ -8,15 +8,19 @@ import os
 # Créer l'application Dash
 app = Dash(__name__)
 
-# Fonction pour charger les données
 def load_data():
     if os.path.exists('eurostoxx50_data.csv'):
         df = pd.read_csv('eurostoxx50_data.csv', header=0)
+        df.columns = df.columns.str.strip()  # Nettoyer les espaces
+
+        print("[DEBUG] Colonnes CSV:", df.columns.tolist())  # Optionnel pour vérifier
+
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         df = df.sort_values(by='Date')
-        return df.dropna()
+        return df
     else:
         return pd.DataFrame(columns=['Date', 'Index', 'Price'])
+
 
 # Fonction pour calculer la volatilité
 def calculate_volatility(df, interval_minutes=60):
