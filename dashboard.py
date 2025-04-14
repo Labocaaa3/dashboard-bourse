@@ -47,14 +47,11 @@ app.layout = html.Div([
     )
 ])
 
-# Callback pour mettre à jour les graphiques
 @app.callback(
     [Output('live-graph-price', 'figure'),
      Output('live-graph-volatility', 'figure')],
     [Input('interval-component', 'n_intervals')]
 )
-# ... (imports et le reste inchangé)
-
 def update_graphs(n):
     df = load_data()
     
@@ -77,16 +74,16 @@ def update_graphs(n):
         template='plotly_dark'
     )
     
-    # Calcul de volatilités multiples
-    vol_10min = calculate_volatility(df, 10)
+    # Calcul de volatilité sur 30min, 2h, 4h
     vol_30min = calculate_volatility(df, 30)
     vol_2h = calculate_volatility(df, 120)
+    vol_4h = calculate_volatility(df, 240)
 
     # Graphique de volatilité
     vol_fig = go.Figure(data=[
-        go.Bar(x=['10 min'], y=[vol_10min], name='Vol 10 min', marker_color='red'),
         go.Bar(x=['30 min'], y=[vol_30min], name='Vol 30 min', marker_color='orange'),
-        go.Bar(x=['2 h'], y=[vol_2h], name='Vol 2h', marker_color='blue'),
+        go.Bar(x=['2 h'], y=[vol_2h], name='Vol 2 h', marker_color='blue'),
+        go.Bar(x=['4 h'], y=[vol_4h], name='Vol 4 h', marker_color='purple'),
     ])
     vol_fig.update_layout(
         title='Volatilité de l\'Eurostoxx 50 (multi-intervalles)',
