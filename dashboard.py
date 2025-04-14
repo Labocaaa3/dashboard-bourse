@@ -14,6 +14,13 @@ def load_data():
         df.columns = df.columns.str.strip() 
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         df = df.sort_values(by='Date')
+
+        # 🕒 Filtrer entre 07:00 et 15:30
+        df['Time'] = df['Date'].dt.time
+        df = df[(df['Time'] >= pd.to_datetime("07:00:00").time()) &
+                (df['Time'] <= pd.to_datetime("15:30:00").time())]
+        df.drop(columns='Time', inplace=True)
+
         return df
     else:
         return pd.DataFrame(columns=['Date', 'Index', 'Price'])
@@ -21,15 +28,14 @@ def load_data():
 
 # Fonction pour calculer la volatilité
 def calculate_volatility(df, interval_minutes=60):
-    # Filtrer les données des dernières "interval_minutes"
     recent_df = df[df['Date'] > (df['Date'].max() - pd.Timedelta(minutes=interval_minutes))]
     
-    if len(recent_df) < 2:  # Si pas assez de données, retour vide
+    if len(recent_df) < 2:
         return None
     
     prices = recent_df['Price'].astype(float)
-    returns = prices.pct_change().dropna()  # Variation en pourcentage
-    volatility = np.std(returns) * np.sqrt(len(returns))  # Volatilité annualisée approximative
+    returns = prices.pct_change().dropna()
+    volatility = np.std(returns) * np.sqrt(len(returns))
     return volatility
 
 # Layout de l'application
@@ -39,7 +45,7 @@ app.layout = html.Div([
     dcc.Graph(id='live-graph-volatility'),
     dcc.Interval(
         id='interval-component',
-        interval=5*60*1000,  # Actualisation toutes les 5 minutes
+        interval=5*60*1000,
         n_intervals=0
     )
 ])
@@ -93,8 +99,6 @@ def update_graphs(n):
 
     return price_fig, vol_fig
 
-
 # Lancer l'application
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8050)
-
