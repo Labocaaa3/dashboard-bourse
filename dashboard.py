@@ -12,9 +12,6 @@ def load_data():
     if os.path.exists('eurostoxx50_data.csv'):
         df = pd.read_csv('eurostoxx50_data.csv', header=0)
         df.columns = df.columns.str.strip() 
-
-        print("[DEBUG] Colonnes CSV:", df.columns.tolist()) 
-
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         df = df.sort_values(by='Date')
         return df
